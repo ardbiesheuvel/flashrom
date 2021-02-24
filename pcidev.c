@@ -168,6 +168,8 @@ static int pcidev_shutdown(void *data)
 
 int pci_init_common(void)
 {
+	struct pci_dev *dev;
+
 	if (pacc != NULL) {
 		msg_perr("%s: Tried to allocate a new PCI context, but there is still an old one!\n"
 			 "Please report a bug at flashrom@flashrom.org\n", __func__);
@@ -178,6 +180,10 @@ int pci_init_common(void)
 	if (register_shutdown(pcidev_shutdown, NULL))
 		return 1;
 	pci_scan_bus(pacc);     /* We want to get the list of devices */
+	for (dev=pacc->devices; dev; dev=dev->next)     /* Iterate over all devices */
+	{
+		pci_fill_info(dev, PCI_FILL_IDENT | PCI_FILL_BASES | PCI_FILL_CLASS);   /* Fill in header info we need */
+	}
 	return 0;
 }
 
@@ -571,7 +577,7 @@ flashrom_pci_init(const struct flashrom_pci_match *matches)
 	struct pci_filter filter;
 	struct pci_dev *dev, *found_dev = NULL;
 	const struct flashrom_pci_match *found_match = NULL;
-	char *pcidev_bdf;
+	char *pcidev_sbdf;
 	char buffer[1024], *name = NULL;
 	int i, found = 0;
 
@@ -581,16 +587,16 @@ flashrom_pci_init(const struct flashrom_pci_match *matches)
 	pci_filter_init(pacc, &filter);
 
 	/* Filter by bb:dd.f (if supplied by the user). */
-	pcidev_bdf = extract_programmer_param("pci");
-	if (pcidev_bdf) {
+	pcidev_sbdf = extract_programmer_param("pci");
+	if (pcidev_sbdf) {
 		char *msg;
 
-		if ((msg = pci_filter_parse_slot(&filter, pcidev_bdf))) {
+		if ((msg = pci_filter_parse_slot(&filter, pcidev_sbdf))) {
 			msg_perr("Error: %s\n", msg);
 			return NULL;
 		}
 
-		free(pcidev_bdf);
+		free(pcidev_sbdf);
 	}
 
 	for (dev = pacc->devices; dev; dev = dev->next)
@@ -650,7 +656,7 @@ flashrom_pci_init(const struct flashrom_pci_match *matches)
 
 	snprintf(buffer, sizeof(buffer) - 1,
 		 "/sys/bus/pci/devices/%04x:%02x:%02x.%01x/",
-		 0, found_dev->bus, found_dev->dev, found_dev->func);
+		 found_dev->domain, found_dev->bus, found_dev->dev, found_dev->func);
 	device->sysfs_path = strdup(buffer);
 
 	device->private = found_match->private;
